@@ -4,18 +4,14 @@
       <router-link to="/">← 返回首页</router-link>
     </div>
 
-    <!-- 加载中 -->
     <div v-if="loading" class="state">加载中…</div>
 
-    <!-- 出错 -->
     <div v-else-if="error" class="state error">
       <p>{{ error }}</p>
       <button @click="fetchData">重试</button>
     </div>
 
-    <!-- 内容 -->
     <template v-else-if="user">
-      <!-- 用户信息卡 -->
       <div class="user-header">
         <img :src="user.avatar_url" :alt="user.login" class="avatar" />
         <div class="user-info">
@@ -30,7 +26,6 @@
         </div>
       </div>
 
-      <!-- 仓库列表 -->
       <div class="repos">
         <h2>仓库列表</h2>
 
@@ -57,7 +52,6 @@
             </div>
           </div>
 
-          <!-- 分页 -->
           <div class="pagination">
             <button :disabled="page <= 1" @click="changePage(page - 1)">
               上一页
@@ -92,10 +86,23 @@ const error = ref("");
 const page = ref(1);
 const perPage = 10;
 
+// 简单的内存缓存：同一个用户名短时间内不重复请求
+const cache = new Map();
+
 // 拉用户信息 + 仓库列表（两个接口并行）
 async function fetchData() {
   const name = username.value;
   if (!name) return;
+
+  // 缓存命中：直接用，不再发请求
+  if (cache.has(name)) {
+    const cached = cache.get(name);
+    user.value = cached.user;
+    repos.value = cached.repos;
+    error.value = "";
+    loading.value = false;
+    return;
+  }
 
   loading.value = true;
   error.value = "";
@@ -112,8 +119,10 @@ async function fetchData() {
         headers: { Accept: "application/vnd.github+json" },
       }),
     ]);
+
     user.value = userRes.data;
     repos.value = reposRes.data || [];
+    cache.set(name, { user: user.value, repos: [...repos.value] });
   } catch (e) {
     if (e.response && e.response.status === 404) {
       error.value = "用户不存在";
